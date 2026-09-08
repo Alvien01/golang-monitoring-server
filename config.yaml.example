@@ -1,27 +1,39 @@
-# Konfigurasi server yang mau dimonitor
-server:
-  host: "192.168.1.100"
-  port: "22"
-  username: "root"
+# Daftar server yang mau dimonitor (Mendukung Multi-Server)
+servers:
+  - id: "web-prod"
+    name: "Web Server Production"
+    host: "192.168.1.100"
+    port: "22"
+    username: "root"
+    # Autentikasi via Password (bisa plain text, ekspansi ${SSH_PASSWORD}, atau env var)
+    password: "your_password_here"
+    # Atau Autentikasi via Private Key
+    private_key_path: ""       # Contoh: "C:/Users/username/.ssh/id_rsa" atau "/home/user/.ssh/id_rsa"
+    private_key_passphrase: "" # Kosongkan jika key tidak ber-passphrase
+    # Keamanan Host Key:
+    insecure_ignore_host_key: true
+    known_hosts_path: ""
 
-  # Autentikasi: Pilih salah satu (password ATAU private_key_path)
-  # Tips Keamanan: Anda bisa menggunakan sintaks ${ENV_VAR} atau env var sistem SSH_PASSWORD
-  # Contoh: password: "${SSH_PASSWORD}"
-  password: "your_password_here"
-  
-  # Autentikasi via Private Key (lebih direkomendasikan daripada password)
-  private_key_path: ""       # Contoh: "C:/Users/username/.ssh/id_rsa" atau "/home/user/.ssh/id_rsa"
-  private_key_passphrase: "" # Kosongkan jika key tidak diproteksi passphrase
+  # Contoh server kedua:
+  # - id: "db-prod"
+  #   name: "Database Server"
+  #   host: "192.168.1.101"
+  #   port: "22"
+  #   username: "deploy"
+  #   private_key_path: "~/.ssh/id_ed25519"
+  #   insecure_ignore_host_key: false
 
-  # Keamanan Host Key:
-  # - insecure_ignore_host_key: true  -> Mengabaikan verifikasi host key (praktis untuk dev/testing)
-  # - insecure_ignore_host_key: false -> Verifikasi host key via known_hosts (direkomendasikan untuk production)
-  insecure_ignore_host_key: true
+# Keamanan Dashboard Web (HTTP Basic Auth)
+auth:
+  enabled: false             # Ubah ke true untuk melindungi dashboard dengan password
+  username: "admin"
+  password: "your_secret_password" # Mendukung ekspansi ${AUTH_PASSWORD}
 
-  # Path file known_hosts (opsional, default mengecek ~/.ssh/known_hosts jika dikosongkan)
-  known_hosts_path: ""
+# Kebijakan Retensi Data (Housekeeping SQLite)
+# Otomatis menghapus record metrik yang lebih tua dari N hari (0 = nonaktif)
+retention_days: 7
 
-# Interval pengecekan (dalam detik)
+# Interval pengecekan SSH (dalam detik)
 check_interval_seconds: 30
 
 # Port untuk web dashboard

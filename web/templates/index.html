@@ -2,79 +2,638 @@
 <html lang="id">
 <head>
 	<meta charset="UTF-8">
-	<title>Server Monitoring - {{.ServerTag}}</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>PulseNode - Server Monitoring Dashboard</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
 	<style>
-		body { font-family: -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
-		h1 { font-size: 20px; margin-bottom: 4px; }
-		.subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
-		.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
-		.card { background: #1e293b; border-radius: 10px; padding: 16px; }
-		.card .label { color: #94a3b8; font-size: 13px; }
-		.card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
-		.chart-box { background: #1e293b; border-radius: 10px; padding: 16px; margin-bottom: 20px; }
-		canvas { max-height: 220px; }
+		:root {
+			--bg-base: #090d16;
+			--bg-card: #131c2e;
+			--bg-card-hover: #19253d;
+			--border: #1e293b;
+			--border-active: #38bdf8;
+			--text-main: #f1f5f9;
+			--text-muted: #94a3b8;
+			--cyan: #38bdf8;
+			--purple: #a78bfa;
+			--orange: #fb923c;
+			--emerald: #34d399;
+			--rose: #fb7185;
+		}
+
+		* { box-sizing: border-box; margin: 0; padding: 0; }
+		body {
+			font-family: 'Inter', -apple-system, sans-serif;
+			background: var(--bg-base);
+			color: var(--text-main);
+			min-height: 100vh;
+			padding: 24px;
+		}
+
+		.container {
+			max-width: 1200px;
+			margin: 0 auto;
+		}
+
+		/* Header & Top Bar */
+		header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 24px;
+			flex-wrap: wrap;
+			gap: 16px;
+			padding-bottom: 20px;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.brand {
+			display: flex;
+			align-items: center;
+			gap: 12px;
+		}
+
+		.brand-logo {
+			width: 38px;
+			height: 38px;
+			background: linear-gradient(135deg, #0ea5e9, #6366f1);
+			border-radius: 10px;
+			display: flex;
+			align-items: center;
+			justify-content: center;
+			box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+			font-size: 20px;
+		}
+
+		.brand-title h1 {
+			font-size: 18px;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+		}
+
+		.brand-title p {
+			font-size: 12px;
+			color: var(--text-muted);
+		}
+
+		.live-badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			background: rgba(52, 211, 153, 0.1);
+			border: 1px solid rgba(52, 211, 153, 0.25);
+			padding: 6px 14px;
+			border-radius: 9999px;
+			font-size: 12px;
+			font-weight: 500;
+			color: var(--emerald);
+		}
+
+		.live-dot {
+			width: 8px;
+			height: 8px;
+			background: var(--emerald);
+			border-radius: 50%;
+			box-shadow: 0 0 10px var(--emerald);
+			animation: pulse 1.8s infinite;
+		}
+
+		.live-badge.disconnected {
+			background: rgba(251, 113, 133, 0.1);
+			border-color: rgba(251, 113, 133, 0.3);
+			color: var(--rose);
+		}
+		.live-badge.disconnected .live-dot {
+			background: var(--rose);
+			box-shadow: none;
+			animation: none;
+		}
+
+		@keyframes pulse {
+			0%, 100% { opacity: 1; transform: scale(1); }
+			50% { opacity: 0.4; transform: scale(0.85); }
+		}
+
+		/* Server Switcher Bar */
+		.server-bar {
+			display: flex;
+			gap: 10px;
+			margin-bottom: 24px;
+			overflow-x: auto;
+			padding-bottom: 4px;
+		}
+
+		.server-pill {
+			display: flex;
+			align-items: center;
+			gap: 10px;
+			background: var(--bg-card);
+			border: 1px solid var(--border);
+			padding: 10px 18px;
+			border-radius: 12px;
+			cursor: pointer;
+			transition: all 0.2s ease;
+			color: var(--text-muted);
+			font-size: 13px;
+			font-weight: 500;
+			white-space: nowrap;
+		}
+
+		.server-pill:hover {
+			background: var(--bg-card-hover);
+			border-color: #334155;
+			color: var(--text-main);
+		}
+
+		.server-pill.active {
+			background: rgba(56, 189, 248, 0.12);
+			border-color: var(--cyan);
+			color: #38bdf8;
+			box-shadow: 0 0 18px rgba(56, 189, 248, 0.15);
+		}
+
+		.server-pill .dot {
+			width: 8px;
+			height: 8px;
+			border-radius: 50%;
+			background: #64748b;
+		}
+		.server-pill.active .dot {
+			background: var(--cyan);
+			box-shadow: 0 0 8px var(--cyan);
+		}
+
+		/* Stat Cards Grid */
+		.cards-grid {
+			display: grid;
+			grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+			gap: 16px;
+			margin-bottom: 24px;
+		}
+
+		.card {
+			background: var(--bg-card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 18px;
+			position: relative;
+			overflow: hidden;
+			transition: transform 0.2s ease, border-color 0.2s ease;
+		}
+
+		.card:hover {
+			border-color: #334155;
+			transform: translateY(-2px);
+		}
+
+		.card-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 10px;
+		}
+
+		.card-label {
+			font-size: 12px;
+			font-weight: 600;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			color: var(--text-muted);
+		}
+
+		.card-icon {
+			font-size: 16px;
+			opacity: 0.8;
+		}
+
+		.card-value {
+			font-size: 30px;
+			font-weight: 700;
+			letter-spacing: -0.02em;
+			margin-bottom: 6px;
+		}
+
+		.card-meta {
+			font-size: 12px;
+			color: var(--text-muted);
+		}
+
+		.bar-bg {
+			width: 100%;
+			height: 4px;
+			background: rgba(255, 255, 255, 0.07);
+			border-radius: 2px;
+			margin-top: 10px;
+			overflow: hidden;
+		}
+
+		.bar-fill {
+			height: 100%;
+			border-radius: 2px;
+			transition: width 0.4s ease;
+		}
+
+		/* Chart Section */
+		.chart-panel {
+			background: var(--bg-card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 20px;
+			margin-bottom: 24px;
+		}
+
+		.chart-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 16px;
+		}
+
+		.chart-title {
+			font-size: 14px;
+			font-weight: 600;
+			color: var(--text-main);
+		}
+
+		.chart-container {
+			position: relative;
+			height: 250px;
+			width: 100%;
+		}
+
+		/* Process Table Section */
+		.table-panel {
+			background: var(--bg-card);
+			border: 1px solid var(--border);
+			border-radius: 14px;
+			padding: 20px;
+		}
+
+		.table-header {
+			display: flex;
+			justify-content: space-between;
+			align-items: center;
+			margin-bottom: 16px;
+		}
+
+		.table-title {
+			font-size: 14px;
+			font-weight: 600;
+		}
+
+		.procs-table {
+			width: 100%;
+			border-collapse: collapse;
+			font-size: 13px;
+			text-align: left;
+		}
+
+		.procs-table th {
+			color: var(--text-muted);
+			font-size: 11px;
+			text-transform: uppercase;
+			letter-spacing: 0.05em;
+			padding: 10px 12px;
+			border-bottom: 1px solid var(--border);
+		}
+
+		.procs-table td {
+			padding: 10px 12px;
+			border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+			font-family: 'JetBrains Mono', monospace;
+			font-size: 12px;
+		}
+
+		.procs-table tr:hover td {
+			background: rgba(255, 255, 255, 0.02);
+		}
+
+		.tag-cpu {
+			background: rgba(56, 189, 248, 0.15);
+			color: #38bdf8;
+			padding: 2px 6px;
+			border-radius: 4px;
+		}
+
+		.tag-mem {
+			background: rgba(167, 139, 250, 0.15);
+			color: #a78bfa;
+			padding: 2px 6px;
+			border-radius: 4px;
+		}
 	</style>
 </head>
 <body>
-	<h1>📊 Server Monitoring</h1>
-	<div class="subtitle">Target: {{.ServerTag}} — update tiap 5 detik</div>
+	<div class="container">
+		<header>
+			<div class="brand">
+				<div class="brand-logo">⚡</div>
+				<div class="brand-title">
+					<h1>PulseNode Monitoring</h1>
+					<p id="targetServerDesc">Real-Time Infrastructure Telemetry</p>
+				</div>
+			</div>
+			<div class="live-badge" id="sseBadge">
+				<span class="live-dot"></span>
+				<span id="sseStatusText">Live SSE Connected</span>
+			</div>
+		</header>
 
-	<div class="cards">
-		<div class="card"><div class="label">CPU Usage</div><div class="value" id="cpuValue">-</div></div>
-		<div class="card"><div class="label">Memory Usage</div><div class="value" id="memValue">-</div></div>
-		<div class="card"><div class="label">Disk Usage</div><div class="value" id="diskValue">-</div></div>
-		<div class="card"><div class="label">Load Average</div><div class="value" id="loadValue">-</div></div>
-	</div>
+		<!-- Multi-Server Selector -->
+		<div class="server-bar" id="serverBar">
+			{{range .Servers}}
+			<div class="server-pill {{if eq .ID $.DefaultServerID}}active{{end}}" data-server-id="{{.ID}}" data-server-name="{{.Name}}" data-server-host="{{.Host}}" onclick="switchServer('{{.ID}}', '{{.Name}}', '{{.Host}}')">
+				<span class="dot"></span>
+				<span>{{.Name}}</span>
+				<span style="font-size: 11px; color: var(--text-muted);">({{.Host}})</span>
+			</div>
+			{{end}}
+		</div>
 
-	<div class="chart-box">
-		<canvas id="chart"></canvas>
+		<!-- Top Stat Cards Grid -->
+		<div class="cards-grid">
+			<div class="card">
+				<div class="card-header">
+					<span class="card-label">CPU Usage</span>
+					<span class="card-icon">⚡</span>
+				</div>
+				<div class="card-value" id="cpuValue" style="color: var(--cyan);">-</div>
+				<div class="card-meta" id="cpuMeta">Utilization load</div>
+				<div class="bar-bg"><div class="bar-fill" id="cpuBar" style="width: 0%; background: var(--cyan);"></div></div>
+			</div>
+
+			<div class="card">
+				<div class="card-header">
+					<span class="card-label">Memory Usage</span>
+					<span class="card-icon">🧠</span>
+				</div>
+				<div class="card-value" id="memValue" style="color: var(--purple);">-</div>
+				<div class="card-meta" id="memMeta">- / - MB</div>
+				<div class="bar-bg"><div class="bar-fill" id="memBar" style="width: 0%; background: var(--purple);"></div></div>
+			</div>
+
+			<div class="card">
+				<div class="card-header">
+					<span class="card-label">Disk Usage (/)</span>
+					<span class="card-icon">💾</span>
+				</div>
+				<div class="card-value" id="diskValue" style="color: var(--orange);">-</div>
+				<div class="card-meta">Root partition mounted</div>
+				<div class="bar-bg"><div class="bar-fill" id="diskBar" style="width: 0%; background: var(--orange);"></div></div>
+			</div>
+
+			<div class="card">
+				<div class="card-header">
+					<span class="card-label">Load Average</span>
+					<span class="card-icon">📈</span>
+				</div>
+				<div class="card-value" id="loadValue" style="color: var(--emerald);">-</div>
+				<div class="card-meta">1-min average</div>
+				<div class="bar-bg"><div class="bar-fill" id="loadBar" style="width: 0%; background: var(--emerald);"></div></div>
+			</div>
+
+			<div class="card">
+				<div class="card-header">
+					<span class="card-label">Uptime</span>
+					<span class="card-icon">⏱️</span>
+				</div>
+				<div class="card-value" id="uptimeValue" style="font-size: 18px; line-height: 1.5; color: var(--text-main);">-</div>
+				<div class="card-meta" id="lastSeenMeta">Last check: just now</div>
+			</div>
+		</div>
+
+		<!-- Historical Chart -->
+		<div class="chart-panel">
+			<div class="chart-header">
+				<span class="chart-title">📊 Metrics History (Live Telemetry)</span>
+				<span style="font-size: 12px; color: var(--text-muted);" id="chartPointsCount">100 records</span>
+			</div>
+			<div class="chart-container">
+				<canvas id="metricsChart"></canvas>
+			</div>
+		</div>
+
+		<!-- Top Processes Table -->
+		<div class="table-panel">
+			<div class="table-header">
+				<span class="table-title">🔥 Top 5 Resource-Consuming Processes</span>
+				<span style="font-size: 12px; color: var(--text-muted);">Sorted by % CPU</span>
+			</div>
+			<table class="procs-table">
+				<thead>
+					<tr>
+						<th>PID</th>
+						<th>USER</th>
+						<th>% CPU</th>
+						<th>% MEM</th>
+						<th>COMMAND</th>
+					</tr>
+				</thead>
+				<tbody id="procsBody">
+					<tr><td colspan="5" style="text-align: center; color: var(--text-muted);">Menunggu telemetri proses...</td></tr>
+				</tbody>
+			</table>
+		</div>
 	</div>
 
 	<script>
-		const ctx = document.getElementById('chart').getContext('2d');
+		let activeServerID = "{{.DefaultServerID}}";
+
+		// Setup Chart.js
+		const ctx = document.getElementById('metricsChart').getContext('2d');
 		const chart = new Chart(ctx, {
 			type: 'line',
 			data: {
 				labels: [],
 				datasets: [
-					{ label: 'CPU %', data: [], borderColor: '#38bdf8', tension: 0.3 },
-					{ label: 'Memory %', data: [], borderColor: '#a78bfa', tension: 0.3 },
-					{ label: 'Disk %', data: [], borderColor: '#fb923c', tension: 0.3 },
+					{
+						label: 'CPU %',
+						data: [],
+						borderColor: '#38bdf8',
+						backgroundColor: 'rgba(56, 189, 248, 0.05)',
+						borderWidth: 2,
+						tension: 0.35,
+						fill: true,
+						pointRadius: 1
+					},
+					{
+						label: 'Memory %',
+						data: [],
+						borderColor: '#a78bfa',
+						backgroundColor: 'rgba(167, 139, 250, 0.05)',
+						borderWidth: 2,
+						tension: 0.35,
+						fill: true,
+						pointRadius: 1
+					},
+					{
+						label: 'Disk %',
+						data: [],
+						borderColor: '#fb923c',
+						backgroundColor: 'rgba(251, 146, 60, 0.05)',
+						borderWidth: 2,
+						tension: 0.35,
+						fill: true,
+						pointRadius: 1
+					}
 				]
 			},
 			options: {
 				responsive: true,
-				scales: { y: { beginAtZero: true, max: 100 } },
-				plugins: { legend: { labels: { color: '#e2e8f0' } } }
+				maintainAspectRatio: false,
+				animation: false,
+				scales: {
+					y: {
+						beginAtZero: true,
+						max: 100,
+						grid: { color: 'rgba(255, 255, 255, 0.04)' },
+						ticks: { color: '#64748b', font: { size: 11 } }
+					},
+					x: {
+						grid: { display: false },
+						ticks: { color: '#64748b', font: { size: 10 }, maxTicksLimit: 12 }
+					}
+				},
+				plugins: {
+					legend: {
+						labels: { color: '#94a3b8', font: { size: 12 }, boxWidth: 12 }
+					}
+				}
 			}
 		});
 
-		async function refreshLatest() {
-			const res = await fetch('/api/latest');
-			const data = await res.json();
-			if (!data) return;
-			document.getElementById('cpuValue').textContent = data.CPUPercent.toFixed(1) + '%';
-			document.getElementById('memValue').textContent = data.MemPercent.toFixed(1) + '%';
-			document.getElementById('diskValue').textContent = data.DiskPercent.toFixed(1) + '%';
-			document.getElementById('loadValue').textContent = data.LoadAvg.toFixed(2);
+		function switchServer(serverID, serverName, serverHost) {
+			activeServerID = serverID;
+			document.querySelectorAll('.server-pill').forEach(pill => {
+				pill.classList.toggle('active', pill.dataset.serverId === serverID);
+			});
+			document.getElementById('targetServerDesc').textContent = `${serverName} (${serverHost})`;
+			loadLatest();
+			loadRecent();
 		}
 
-		async function refreshChart() {
-			const res = await fetch('/api/recent');
-			const data = await res.json();
+		function updateMetricsUI(data) {
 			if (!data) return;
-			chart.data.labels = data.map(d => d.Timestamp.split(' ')[1] || d.Timestamp);
-			chart.data.datasets[0].data = data.map(d => d.CPUPercent);
-			chart.data.datasets[1].data = data.map(d => d.MemPercent);
-			chart.data.datasets[2].data = data.map(d => d.DiskPercent);
-			chart.update();
+
+			document.getElementById('cpuValue').textContent = data.cpu_percent.toFixed(1) + '%';
+			document.getElementById('cpuBar').style.width = Math.min(data.cpu_percent, 100) + '%';
+
+			document.getElementById('memValue').textContent = data.mem_percent.toFixed(1) + '%';
+			document.getElementById('memBar').style.width = Math.min(data.mem_percent, 100) + '%';
+			document.getElementById('memMeta').textContent = `${Math.round(data.mem_used_mb)} / ${Math.round(data.mem_total_mb)} MB`;
+
+			document.getElementById('diskValue').textContent = data.disk_percent.toFixed(1) + '%';
+			document.getElementById('diskBar').style.width = Math.min(data.disk_percent, 100) + '%';
+
+			document.getElementById('loadValue').textContent = data.load_avg.toFixed(2);
+			document.getElementById('loadBar').style.width = Math.min((data.load_avg / 4.0) * 100, 100) + '%';
+
+			document.getElementById('uptimeValue').textContent = data.uptime || 'Active';
+			document.getElementById('lastSeenMeta').textContent = 'Pembaruan: ' + (data.timestamp ? data.timestamp.split(' ')[1] || data.timestamp : 'baru saja');
+
+			// Top Processes Table
+			const tbody = document.getElementById('procsBody');
+			let procs = [];
+			try {
+				procs = typeof data.top_processes === 'string' ? JSON.parse(data.top_processes) : data.top_processes;
+			} catch (e) {
+				procs = [];
+			}
+
+			if (Array.isArray(procs) && procs.length > 0) {
+				tbody.innerHTML = procs.map(p => `
+					<tr>
+						<td>${p.pid}</td>
+						<td style="color: #cbd5e1;">${p.user}</td>
+						<td><span class="tag-cpu">${p.cpu.toFixed(1)}%</span></td>
+						<td><span class="tag-mem">${p.mem.toFixed(1)}%</span></td>
+						<td style="color: #94a3b8; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${p.command}</td>
+					</tr>
+				`).join('');
+			}
 		}
 
-		refreshLatest();
-		refreshChart();
-		setInterval(refreshLatest, 5000);
-		setInterval(refreshChart, 5000);
+		async function loadLatest() {
+			try {
+				const res = await fetch(`/api/latest?server_id=${encodeURIComponent(activeServerID)}`);
+				if (res.ok) {
+					const data = await res.json();
+					updateMetricsUI(data);
+				}
+			} catch (e) {
+				console.error('Failed to load latest:', e);
+			}
+		}
+
+		async function loadRecent() {
+			try {
+				const res = await fetch(`/api/recent?server_id=${encodeURIComponent(activeServerID)}&limit=60`);
+				if (res.ok) {
+					const data = await res.json();
+					if (Array.isArray(data)) {
+						chart.data.labels = data.map(d => (d.timestamp.split(' ')[1] || d.timestamp).slice(0, 8));
+						chart.data.datasets[0].data = data.map(d => d.cpu_percent);
+						chart.data.datasets[1].data = data.map(d => d.mem_percent);
+						chart.data.datasets[2].data = data.map(d => d.disk_percent);
+						chart.update();
+					}
+				}
+			} catch (e) {
+				console.error('Failed to load recent:', e);
+			}
+		}
+
+		// Connect Server-Sent Events (SSE) for Real-Time Streaming
+		function initSSE() {
+			const badge = document.getElementById('sseBadge');
+			const statusText = document.getElementById('sseStatusText');
+			const evtSource = new EventSource('/api/events');
+
+			evtSource.onopen = function() {
+				badge.classList.remove('disconnected');
+				statusText.textContent = 'Live SSE Connected';
+			};
+
+			evtSource.addEventListener('metric', function(e) {
+				try {
+					const metric = JSON.parse(e.data);
+					// Filter hanya untuk server yang sedang dipilih
+					if (metric.server_id === activeServerID) {
+						updateMetricsUI(metric);
+
+						// Append live ke chart
+						const labelTime = (metric.timestamp.split(' ')[1] || metric.timestamp).slice(0, 8);
+						chart.data.labels.push(labelTime);
+						chart.data.datasets[0].data.push(metric.cpu_percent);
+						chart.data.datasets[1].data.push(metric.mem_percent);
+						chart.data.datasets[2].data.push(metric.disk_percent);
+
+						if (chart.data.labels.length > 60) {
+							chart.data.labels.shift();
+							chart.data.datasets[0].data.shift();
+							chart.data.datasets[1].data.shift();
+							chart.data.datasets[2].data.shift();
+						}
+						chart.update();
+					}
+				} catch (err) {
+					console.error('Error handling SSE metric:', err);
+				}
+			});
+
+			evtSource.onerror = function() {
+				badge.classList.add('disconnected');
+				statusText.textContent = 'Reconnecting...';
+			};
+		}
+
+		// Initial Execution
+		loadLatest();
+		loadRecent();
+		initSSE();
 	</script>
 </body>
 </html>

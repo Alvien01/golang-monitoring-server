@@ -7,6 +7,8 @@ import (
 )
 
 type ServerConfig struct {
+	ID                    string `yaml:"id"`
+	Name                  string `yaml:"name"`
 	Host                  string `yaml:"host"`
 	Port                  string `yaml:"port"`
 	Username              string `yaml:"username"`
@@ -17,11 +19,20 @@ type ServerConfig struct {
 	InsecureIgnoreHostKey bool   `yaml:"insecure_ignore_host_key"`
 }
 
+type AuthConfig struct {
+	Enabled  bool   `yaml:"enabled"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
+}
+
 type Config struct {
-	Server               ServerConfig `yaml:"server"`
-	CheckIntervalSeconds int          `yaml:"check_interval_seconds"`
-	WebPort              string       `yaml:"web_port"`
-	DatabasePath         string       `yaml:"database_path"`
+	Servers              []ServerConfig `yaml:"servers"`
+	Server               ServerConfig   `yaml:"server"` // Kompatibilitas mundur konfigurasi single server
+	Auth                 AuthConfig     `yaml:"auth"`
+	RetentionDays        int            `yaml:"retention_days"`
+	CheckIntervalSeconds int            `yaml:"check_interval_seconds"`
+	WebPort              string         `yaml:"web_port"`
+	DatabasePath         string         `yaml:"database_path"`
 }
 
 // Load membaca file config.yaml dan mengembalikan struct Config
@@ -39,30 +50,62 @@ func Load(path string) (*Config, error) {
 		return nil, err
 	}
 
-	// Fallback ke environment variable jika tidak diisi di YAML
-	if cfg.Server.Password == "" {
-		if envPass := os.Getenv("SSH_PASSWORD"); envPass != "" {
-			cfg.Server.Password = envPass
-		}
+	// Kompatibilitas mundur: jika 'servers' kosong tetapi 'server' ada
+	if len(cfg.Servers) == 0 && cfg.Server.Host != "" {
+		cfg.Servers = append(cfg.Servers, cfg.Server)
 	}
-	if cfg.Server.PrivateKeyPath == "" {
-		if envKey := os.Getenv("SSH_PRIVATE_KEY_PATH"); envKey != "" {
-			cfg.Server.PrivateKeyPath = envKey
+
+	// Normalisasi dan fallback environment variable untuk setiap server
+	for i := range cfg.Servers {
+		s := &cfg.Servers[i]
+		if s.ID == "" {
+			if s.Host != "" {
+				s.ID = s.Host
+			} else {
+				s.ID = "default"
+			}
 		}
-	}
-	if cfg.Server.PrivateKeyPassphrase == "" {
-		if envPassphrase := os.Getenv("SSH_PRIVATE_KEY_PASSPHRASE"); envPassphrase != "" {
-			cfg.Server.PrivateKeyPassphrase = envPassphrase
+		if s.Name == "" {
+			s.Name = s.ID
 		}
-	}
-	if cfg.Server.KnownHostsPath == "" {
-		if envKnownHosts := os.Getenv("SSH_KNOWN_HOSTS_PATH"); envKnownHosts != "" {
-			cfg.Server.KnownHostsPath = envKnownHosts
+		if s.Port == "" {
+			s.Port = "22"
+		}
+
+		// Fallback environment variable jika hanya 1 server dan belum diisi
+		if len(cfg.Servers) == 1 {
+			if s.Password == "" {
+				if envPass := os.Getenv("SSH_PASSWORD"); envPass != "" {
+					s.Password = envPass
+				}
+			}
+			if s.PrivateKeyPath == "" {
+				if envKey := os.Getenv("SSH_PRIVATE_KEY_PATH"); envKey != "" {
+					s.PrivateKeyPath = envKey
+				}
+			}
+			if s.PrivateKeyPassphrase == "" {
+				if envPassphrase := os.Getenv("SSH_PRIVATE_KEY_PASSPHRASE"); envPassphrase != "" {
+					s.PrivateKeyPassphrase = envPassphrase
+				}
+			}
+			if s.KnownHostsPath == "" {
+				if envKnownHosts := os.Getenv("SSH_KNOWN_HOSTS_PATH"); envKnownHosts != "" {
+					s.KnownHostsPath = envKnownHosts
+				}
+			}
 		}
 	}
 
-	// default value kalau tidak diisi di yaml
-	if cfg.CheckIntervalSeconds == 0 {
+	// Fallback auth password jika diaktifkan
+	if cfg.Auth.Enabled && cfg.Auth.Password == "" {
+		if envAuthPass := os.Getenv("AUTH_PASSWORD"); envAuthPass != "" {
+			cfg.Auth.Password = envAuthPass
+		}
+	}
+
+	// default values
+	if cfg.CheckIntervalSeconds <= 0 {
 		cfg.CheckIntervalSeconds = 30
 	}
 	if cfg.WebPort == "" {
@@ -70,6 +113,9 @@ func Load(path string) (*Config, error) {
 	}
 	if cfg.DatabasePath == "" {
 		cfg.DatabasePath = "./data/monitoring.db"
+	}
+	if cfg.RetentionDays <= 0 {
+		cfg.RetentionDays = 7 // Default simpan data 7 hari
 	}
 
 	return &cfg, nil

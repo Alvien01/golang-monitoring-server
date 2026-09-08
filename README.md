@@ -1,44 +1,46 @@
-# Server Monitoring (Go + SSH + SQLite)
+# PulseNode - Multi-Server Monitoring (Go + SSH + SQLite)
 
-Aplikasi monitoring 1 server via SSH. Tinggal isi credential di `config.yaml`, jalankan, buka dashboard di browser.
+Aplikasi monitoring multi-server via SSH dengan antarmuka web modern, streaming data real-time via Server-Sent Events (SSE), inspeksi proses, proteksi Basic Auth, dan housekeeping data otomatis di SQLite.
+
+## Fitur Utama
+
+- 🌐 **Multi-Server Monitoring**: Monitor banyak server secara bersamaan dengan scheduler paralel per-server.
+- ⚡ **Real-Time SSE Streaming**: Data telemetri langsung ter-push ke browser (*zero polling latency*).
+- 🚀 **Optimasi SSH (Compound Command)**: Menggabungkan perintah monitoring ke dalam 1 sesi eksekusi SSH tunggal (hemat bandwidth dan 5x lebih cepat).
+- 🔥 **Inspeksi Top 5 Processes**: Menampilkan proses yang mengonsumsi CPU/RAM tertinggi beserta PID & user.
+- ⏱️ **Server Uptime & Resource Cards**: CPU %, RAM (used/total), Disk (root partition), Load Average, dan status server.
+- 🔒 **Keamanan & Kredensial**:
+  - Dukungan ekspansi Environment Variable `${SSH_PASSWORD}` di `config.yaml`.
+  - Dukungan Private Key authentication (termasuk passphrase).
+  - Verifikasi sidik jari SSH Host Key asli via `known_hosts`.
+  - HTTP Basic Auth opsional untuk melindungi dashboard & API.
+- 🧹 **Data Retention Policy**: Otomatis membersihkan riwayat metrik lama di SQLite (`retention_days`).
+- 💎 **Pure Go SQLite**: Tidak membutuhkan compiler C (gcc/MinGW) maupun CGO di Windows/Linux/macOS.
+
+---
 
 ## Struktur Project
 
 ```
 monitoring-app/
-├── main.go                        # entry point: scheduler + web server
-├── config.yaml                    # isi credential server di sini
+├── main.go                        # entry point: multi-server scheduler + SSE + web server
+├── config.yaml                    # konfigurasi server, auth, dan retensi (di-ignore git)
+├── config.yaml.example            # contoh konfigurasi untuk git
 ├── go.mod
 ├── internal/
-│   ├── config/config.go           # load config.yaml
-│   ├── sshclient/client.go        # koneksi & jalankan command SSH
-│   ├── metrics/parser.go          # parse output command jadi angka
-│   ├── database/sqlite.go         # simpan & ambil history metrics
-│   └── handler/dashboard.go       # HTTP handler (halaman + API JSON)
-├── web/templates/index.html       # dashboard (chart.js, auto-refresh 5 detik)
-└── data/                          # folder database SQLite akan dibuat otomatis
+│   ├── config/config.go           # load & validasi config.yaml + env vars
+│   ├── sshclient/client.go        # SSH client, auth methods, host key verification
+│   ├── metrics/parser.go          # compound command generator & regex parser
+│   ├── database/sqlite.go         # SQLite pure Go, auto-migration & housekeeping
+│   ├── sse/hub.go                 # Server-Sent Events thread-safe broadcast hub
+│   └── handler/dashboard.go       # HTTP handler, API endpoints, dan Basic Auth
+├── web/templates/index.html       # modern dark dashboard (Chart.js + SSE client)
+└── data/                          # folder database SQLite otomatis dibuat
 ```
 
-## Langkah 1: Install Go
+---
 
-Pastikan Go sudah terinstall (`go version`). Kalau belum, download di https://go.dev/dl/
-
-## Langkah 2: Download dependency
-
-Dari dalam folder project ini, jalankan:
-
-```bash
-go mod tidy
-```
-
-Ini akan otomatis download 3 library yang dipakai:
-- `golang.org/x/crypto/ssh` — untuk koneksi SSH
-- `modernc.org/sqlite` — driver SQLite pure Go (tanpa CGO / tanpa butuh gcc)
-- `gopkg.in/yaml.v3` — untuk baca file config.yaml
-
-> **Catatan:** Project ini menggunakan driver `modernc.org/sqlite` yang merupakan implementasi pure Go, sehingga dapat berjalan langsung di Windows tanpa memerlukan compiler C (gcc/MinGW) ataupun mengaktifkan CGO (`CGO_ENABLED=0` tetap bisa berjalan).
-
-## Langkah 3: Siapkan config.yaml
+## Langkah 1: Persiapan Konfigurasi
 
 Salin file contoh konfigurasi lalu sesuaikan isinya:
 
@@ -46,81 +48,75 @@ Salin file contoh konfigurasi lalu sesuaikan isinya:
 # Di Windows PowerShell:
 cp config.yaml.example config.yaml
 
-# Atau di Linux/macOS:
+# Di Linux / macOS:
 cp config.yaml.example config.yaml
 ```
 
-Buka `config.yaml`, isi sesuai server kamu:
+Buka `config.yaml`, sesuaikan daftar server yang ingin Anda monitor:
 
 ```yaml
-server:
-  host: "192.168.1.100"
-  port: "22"
-  username: "root"
+servers:
+  - id: "vps-main"
+    name: "Production VPS"
+    host: "103.163.139.113"
+    port: "22"
+    username: "root"
+    password: "your_password_here" # atau pakai ${SSH_PASSWORD}
+    private_key_path: ""
+    private_key_passphrase: ""
+    insecure_ignore_host_key: true
+    known_hosts_path: ""
 
-  # Opsi 1: Password (bisa plain text, ekspansi ${SSH_PASSWORD}, atau via env var SSH_PASSWORD)
-  password: "your_password_here"
+# Keamanan Dashboard Web (HTTP Basic Auth)
+auth:
+  enabled: false # set true jika ingin dashboard diproteksi login
+  username: "admin"
+  password: "password123"
 
-  # Opsi 2: Private Key (lebih aman)
-  private_key_path: ""       # path ke private key (misal ~/.ssh/id_rsa)
-  private_key_passphrase: "" # jika key diproteksi passphrase
+# Retensi data otomatis (hari)
+retention_days: 7
 
-  # Keamanan Host Key (SSH Host Key Verification)
-  insecure_ignore_host_key: true # set false untuk verifikasi ketat via known_hosts
-  known_hosts_path: ""           # path file known_hosts (opsional)
+# Interval pengecekan (detik)
+check_interval_seconds: 30
+
+web_port: "8080"
+database_path: "./data/monitoring.db"
 ```
 
-### Tips Keamanan Kredensial & Host Key
+---
 
-1. **Gunakan Environment Variable untuk Password**:
-   Alih-alih menulis password langsung di `config.yaml`, Anda bisa:
-   - Menulis `password: "${SSH_PASSWORD}"` di `config.yaml`, atau
-   - Mengosongkan `password: ""` dan langsung mengekspor env var:
-     ```powershell
-     # Windows PowerShell:
-     $env:SSH_PASSWORD="rahasia_password"
-     go run main.go
-     ```
-     ```bash
-     # Linux / macOS:
-     export SSH_PASSWORD="rahasia_password"
-     go run main.go
-     ```
-2. **Gunakan Private Key Authentication**:
-   Isi `private_key_path` (misalnya `~/.ssh/id_ed25519` atau `C:/Users/username/.ssh/id_rsa`). Jika private key Anda terenkripsi dengan passphrase, isi `private_key_passphrase` atau set env var `SSH_PRIVATE_KEY_PASSPHRASE`.
-3. **Verifikasi Host Key Asli**:
-   Untuk produksi, ubah `insecure_ignore_host_key: false`. Aplikasi akan memverifikasi sidik jari host key server terhadap file `known_hosts` (default membaca dari `~/.ssh/known_hosts` atau path yang Anda tentukan di `known_hosts_path`).
-
-## Langkah 4: Jalankan
+## Langkah 2: Jalankan Aplikasi
 
 ```bash
 go run main.go
 ```
 
-Kalau berhasil, akan muncul log:
-```
+Output di terminal:
+```text
 ✅ Dashboard jalan di http://localhost:8080
-🔍 Monitoring server: 192.168.1.100 (cek tiap 30s)
-✔ CPU: 12.3% | Mem: 45.6% | Disk: 38.0% | Load: 0.52
+🔍 Memonitor 1 server (cek tiap 30s, data retention 7 hari)
+   -> [vps-main] Production VPS (103.163.139.113:22)
+✔ [vps-main] CPU: 12.3% | Mem: 45.6% | Disk: 38.0% | Load: 0.52 | Up: 4 days, 2 hours
 ```
 
-Buka browser ke **http://localhost:8080** untuk lihat dashboard.
+Buka browser ke **http://localhost:8080** untuk mengakses dashboard.
 
-## Langkah 5 (opsional): Compile jadi 1 binary
+---
 
-```bash
-go build -o monitoring-app.exe main.go
-```
+## Endpoint API yang Tersedia
 
-Lalu jalankan `monitoring-app.exe` — tetap butuh file `config.yaml` dan folder `web/` ada di direktori yang sama.
+| Endpoint | Method | Keterangan |
+|---|---|---|
+| `/` | GET | Halaman web dashboard interaktif |
+| `/api/servers` | GET | Daftar seluruh server yang dikonfigurasi beserta status terkini |
+| `/api/latest?server_id=ID` | GET | Snapshot metrik terbaru server tertentu |
+| `/api/recent?server_id=ID&limit=60` | GET | Riwayat metrik untuk grafik chart |
+| `/api/events` | GET | Server-Sent Events (SSE) stream untuk update real-time |
 
-## Cara Kerja Singkat
+---
 
-1. `main.go` jalankan 2 hal secara paralel: **scheduler** (goroutine, cek server tiap interval) dan **web server** (serve dashboard + API).
-2. Scheduler konek SSH → jalankan command (`top`, `free`, `df`, `cat /proc/loadavg`) → parse hasilnya → simpan ke SQLite.
-3. Dashboard (browser) polling API `/api/latest` dan `/api/recent` tiap 5 detik untuk update angka & grafik.
+## Rencana Pengembangan Selanjutnya
 
-## Yang Perlu Disesuaikan / Dikembangkan Lagi
-
-- **Alerting:** belum ada notifikasi kalau CPU/disk mendekati penuh — bisa ditambah pengecekan threshold di `checkServer()` lalu kirim ke Telegram/email/Slack.
-- **Multi-server:** kalau nanti mau monitoring lebih dari 1 server, struktur `config.yaml` dan tabel `metrics` perlu ditambah kolom/field `server_id`.
+- **Alerting System**: Notifikasi via Telegram Bot, Discord Webhook, Slack, atau Email ketika CPU/RAM/Disk melebihi batas toleransi.
+- **Service & Container Monitoring**: Memantau status service `systemd` (Nginx, Docker, PostgreSQL, MySQL) atau kontainer Docker yang aktif.
+- **Bandwidth / Network I/O**: Memantau grafik kecepatan download/upload secara real-time via `/proc/net/dev`.
