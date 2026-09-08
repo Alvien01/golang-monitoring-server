@@ -1,0 +1,47 @@
+# Konfigurasi & Secret (JANGAN DI-COMMIT)
+config.yaml
+*.env
+*.env.*
+*.pem
+*.key
+id_rsa*
+id_ed25519*
+
+# Database & Storage
+data/
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Binaries & Executables
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+monitoring-app
+test_app.exe
+
+# Go build & test artifacts
+*.test
+*.out
+*.prof
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
+*~
+
+# OS generated files
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini

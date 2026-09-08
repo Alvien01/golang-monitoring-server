@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+	<meta charset="UTF-8">
+	<title>Server Monitoring - {{.ServerTag}}</title>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.4/chart.umd.min.js"></script>
+	<style>
+		body { font-family: -apple-system, sans-serif; background: #0f172a; color: #e2e8f0; margin: 0; padding: 24px; }
+		h1 { font-size: 20px; margin-bottom: 4px; }
+		.subtitle { color: #94a3b8; margin-bottom: 24px; font-size: 14px; }
+		.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: 16px; margin-bottom: 24px; }
+		.card { background: #1e293b; border-radius: 10px; padding: 16px; }
+		.card .label { color: #94a3b8; font-size: 13px; }
+		.card .value { font-size: 28px; font-weight: 600; margin-top: 4px; }
+		.chart-box { background: #1e293b; border-radius: 10px; padding: 16px; margin-bottom: 20px; }
+		canvas { max-height: 220px; }
+	</style>
+</head>
+<body>
+	<h1>📊 Server Monitoring</h1>
+	<div class="subtitle">Target: {{.ServerTag}} — update tiap 5 detik</div>
+
+	<div class="cards">
+		<div class="card"><div class="label">CPU Usage</div><div class="value" id="cpuValue">-</div></div>
+		<div class="card"><div class="label">Memory Usage</div><div class="value" id="memValue">-</div></div>
+		<div class="card"><div class="label">Disk Usage</div><div class="value" id="diskValue">-</div></div>
+		<div class="card"><div class="label">Load Average</div><div class="value" id="loadValue">-</div></div>
+	</div>
+
+	<div class="chart-box">
+		<canvas id="chart"></canvas>
+	</div>
+
+	<script>
+		const ctx = document.getElementById('chart').getContext('2d');
+		const chart = new Chart(ctx, {
+			type: 'line',
+			data: {
+				labels: [],
+				datasets: [
+					{ label: 'CPU %', data: [], borderColor: '#38bdf8', tension: 0.3 },
+					{ label: 'Memory %', data: [], borderColor: '#a78bfa', tension: 0.3 },
+					{ label: 'Disk %', data: [], borderColor: '#fb923c', tension: 0.3 },
+				]
+			},
+			options: {
+				responsive: true,
+				scales: { y: { beginAtZero: true, max: 100 } },
+				plugins: { legend: { labels: { color: '#e2e8f0' } } }
+			}
+		});
+
+		async function refreshLatest() {
+			const res = await fetch('/api/latest');
+			const data = await res.json();
+			if (!data) return;
+			document.getElementById('cpuValue').textContent = data.CPUPercent.toFixed(1) + '%';
+			document.getElementById('memValue').textContent = data.MemPercent.toFixed(1) + '%';
+			document.getElementById('diskValue').textContent = data.DiskPercent.toFixed(1) + '%';
+			document.getElementById('loadValue').textContent = data.LoadAvg.toFixed(2);
+		}
+
+		async function refreshChart() {
+			const res = await fetch('/api/recent');
+			const data = await res.json();
+			if (!data) return;
+			chart.data.labels = data.map(d => d.Timestamp.split(' ')[1] || d.Timestamp);
+			chart.data.datasets[0].data = data.map(d => d.CPUPercent);
+			chart.data.datasets[1].data = data.map(d => d.MemPercent);
+			chart.data.datasets[2].data = data.map(d => d.DiskPercent);
+			chart.update();
+		}
+
+		refreshLatest();
+		refreshChart();
+		setInterval(refreshLatest, 5000);
+		setInterval(refreshChart, 5000);
+	</script>
+</body>
+</html>

@@ -1,0 +1,17 @@
+# Konfigurasi server yang mau dimonitor
+server:
+  host: "ip server"
+  port: "22"
+  username: "root"
+  # Pilih salah satu: password ATAU private_key_path (kosongkan yang tidak dipakai)
+  password: "your_password_here"
+  private_key_path: ""  # Contoh: "C:/Users/username/.ssh/id_rsa" atau "/home/user/.ssh/id_rsa"
+
+# Interval pengecekan (dalam detik)
+check_interval_seconds: 30
+
+# Port untuk web dashboard
+web_port: "8080"
+
+# Path file database SQLite
+database_path: "./data/monitoring.db"
