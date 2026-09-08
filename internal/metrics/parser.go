@@ -16,8 +16,6 @@ type Snapshot struct {
 	UptimeRaw    string
 }
 
-// ParseCPU mengambil persentase CPU used dari output: `top -bn1 | grep "Cpu(s)"`
-// Contoh baris: "%Cpu(s):  3.2 us,  1.1 sy,  0.0 ni, 95.4 id,  0.2 wa,  0.0 hi,  0.1 si,  0.0 st"
 func ParseCPU(output string) float64 {
 	re := regexp.MustCompile(`(\d+\.\d+)\s*id`)
 	match := re.FindStringSubmatch(output)
@@ -28,11 +26,9 @@ func ParseCPU(output string) float64 {
 	if err != nil {
 		return 0
 	}
-	return 100 - idle // used = 100 - idle
+	return 100 - idle 
 }
 
-// ParseMem mengambil info memory dari output: `free -m`
-// Contoh baris: "Mem:           7823        2145        3421         102        2256        5312"
 func ParseMem(output string) (usedMB, totalMB, percent float64) {
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -51,8 +47,7 @@ func ParseMem(output string) (usedMB, totalMB, percent float64) {
 	return
 }
 
-// ParseDisk mengambil persentase disk usage dari output: `df -h /`
-// Contoh baris: "/dev/sda1        50G   23G   25G  48% /"
+
 func ParseDisk(output string) float64 {
 	lines := strings.Split(output, "\n")
 	for _, line := range lines {
@@ -71,8 +66,6 @@ func ParseDisk(output string) float64 {
 	return 0
 }
 
-// ParseLoadAvg mengambil load average 1 menit dari output: `cat /proc/loadavg`
-// Contoh: "0.52 0.58 0.59 1/512 12345"
 func ParseLoadAvg(output string) float64 {
 	fields := strings.Fields(output)
 	if len(fields) > 0 {

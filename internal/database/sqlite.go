@@ -23,7 +23,6 @@ type DB struct {
 	conn *sql.DB
 }
 
-// Init membuka (atau membuat) file database SQLite dan menyiapkan tabel
 func Init(path string) (*DB, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return nil, err
@@ -58,7 +57,6 @@ func (db *DB) Close() error {
 	return db.conn.Close()
 }
 
-// InsertMetric menyimpan satu snapshot metrics baru
 func (db *DB) InsertMetric(m MetricRecord) error {
 	_, err := db.conn.Exec(
 		`INSERT INTO metrics (cpu_percent, mem_percent, mem_used_mb, mem_total_mb, disk_percent, load_avg)
@@ -68,7 +66,6 @@ func (db *DB) InsertMetric(m MetricRecord) error {
 	return err
 }
 
-// GetRecent mengambil N record metrics terbaru, urut dari yang paling lama ke terbaru
 func (db *DB) GetRecent(limit int) ([]MetricRecord, error) {
 	rows, err := db.conn.Query(
 		`SELECT id, timestamp, cpu_percent, mem_percent, mem_used_mb, mem_total_mb, disk_percent, load_avg
@@ -88,7 +85,6 @@ func (db *DB) GetRecent(limit int) ([]MetricRecord, error) {
 		results = append(results, m)
 	}
 
-	// balik urutan supaya dari lama -> baru (enak buat chart)
 	for i, j := 0, len(results)-1; i < j; i, j = i+1, j-1 {
 		results[i], results[j] = results[j], results[i]
 	}
@@ -96,7 +92,6 @@ func (db *DB) GetRecent(limit int) ([]MetricRecord, error) {
 	return results, nil
 }
 
-// GetLatest mengambil 1 record metrics paling baru
 func (db *DB) GetLatest() (*MetricRecord, error) {
 	var m MetricRecord
 	row := db.conn.QueryRow(

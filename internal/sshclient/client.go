@@ -3,14 +3,14 @@ package sshclient
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	"golang.org/x/crypto/ssh"
+	"golang.org/x/crypto/ssh/knownhosts"
 	"monitoring-app/internal/config"
 )
 
-// Connect membuka koneksi SSH ke server berdasarkan config.
-// Mendukung auth via password ATAU private key.
 func Connect(cfg config.ServerConfig) (*ssh.Client, error) {
 	var authMethods []ssh.AuthMethod
 
@@ -19,19 +19,32 @@ func Connect(cfg config.ServerConfig) (*ssh.Client, error) {
 		if err != nil {
 			return nil, fmt.Errorf("gagal baca private key: %w", err)
 		}
-		signer, err := ssh.ParsePrivateKey(key)
+
+		var signer ssh.Signer
+		if cfg.PrivateKeyPassphrase != "" {
+			signer, err = ssh.ParsePrivateKeyWithPassphrase(key, []byte(cfg.PrivateKeyPassphrase))
+		} else {
+			signer, err = ssh.ParsePrivateKey(key)
+		}
 		if err != nil {
 			return nil, fmt.Errorf("gagal parse private key: %w", err)
 		}
 		authMethods = append(authMethods, ssh.PublicKeys(signer))
-	} else {
+	} else if cfg.Password != "" {
 		authMethods = append(authMethods, ssh.Password(cfg.Password))
+	} else {
+		return nil, fmt.Errorf("autentikasi gagal: password atau private_key_path harus diisi (via config.yaml atau env var SSH_PASSWORD / SSH_PRIVATE_KEY_PATH)")
+	}
+
+	hostKeyCallback, err := getHostKeyCallback(cfg)
+	if err != nil {
+		return nil, err
 	}
 
 	sshConfig := &ssh.ClientConfig{
 		User:            cfg.Username,
 		Auth:            authMethods,
-		HostKeyCallback: ssh.InsecureIgnoreHostKey(), // NOTE: untuk production sebaiknya verifikasi host key asli
+		HostKeyCallback: hostKeyCallback,
 		Timeout:         10 * time.Second,
 	}
 
@@ -43,7 +56,34 @@ func Connect(cfg config.ServerConfig) (*ssh.Client, error) {
 	return client, nil
 }
 
-// RunCommand menjalankan satu command di server via SSH dan mengembalikan output-nya
+func getHostKeyCallback(cfg config.ServerConfig) (ssh.HostKeyCallback, error) {
+	if cfg.InsecureIgnoreHostKey {
+		return ssh.InsecureIgnoreHostKey(), nil
+	}
+
+	knownHostsPath := cfg.KnownHostsPath
+	if knownHostsPath == "" {
+		home, err := os.UserHomeDir()
+		if err == nil {
+			defaultPath := filepath.Join(home, ".ssh", "known_hosts")
+			if _, statErr := os.Stat(defaultPath); statErr == nil {
+				knownHostsPath = defaultPath
+			}
+		}
+	}
+
+	if knownHostsPath == "" {
+		return nil, fmt.Errorf("verifikasi host key gagal: file known_hosts tidak ditemukan. Buat file known_hosts, tentukan 'known_hosts_path', atau set 'insecure_ignore_host_key: true' di config.yaml")
+	}
+
+	cb, err := knownhosts.New(knownHostsPath)
+	if err != nil {
+		return nil, fmt.Errorf("gagal memuat known_hosts dari '%s': %w", knownHostsPath, err)
+	}
+
+	return cb, nil
+}
+
 func RunCommand(client *ssh.Client, cmd string) (string, error) {
 	session, err := client.NewSession()
 	if err != nil {

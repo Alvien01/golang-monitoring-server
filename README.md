@@ -57,9 +57,39 @@ server:
   host: "192.168.1.100"
   port: "22"
   username: "root"
+
+  # Opsi 1: Password (bisa plain text, ekspansi ${SSH_PASSWORD}, atau via env var SSH_PASSWORD)
   password: "your_password_here"
-  private_key_path: ""   # atau isi path private key kalau pakai key-based auth
+
+  # Opsi 2: Private Key (lebih aman)
+  private_key_path: ""       # path ke private key (misal ~/.ssh/id_rsa)
+  private_key_passphrase: "" # jika key diproteksi passphrase
+
+  # Keamanan Host Key (SSH Host Key Verification)
+  insecure_ignore_host_key: true # set false untuk verifikasi ketat via known_hosts
+  known_hosts_path: ""           # path file known_hosts (opsional)
 ```
+
+### Tips Keamanan Kredensial & Host Key
+
+1. **Gunakan Environment Variable untuk Password**:
+   Alih-alih menulis password langsung di `config.yaml`, Anda bisa:
+   - Menulis `password: "${SSH_PASSWORD}"` di `config.yaml`, atau
+   - Mengosongkan `password: ""` dan langsung mengekspor env var:
+     ```powershell
+     # Windows PowerShell:
+     $env:SSH_PASSWORD="rahasia_password"
+     go run main.go
+     ```
+     ```bash
+     # Linux / macOS:
+     export SSH_PASSWORD="rahasia_password"
+     go run main.go
+     ```
+2. **Gunakan Private Key Authentication**:
+   Isi `private_key_path` (misalnya `~/.ssh/id_ed25519` atau `C:/Users/username/.ssh/id_rsa`). Jika private key Anda terenkripsi dengan passphrase, isi `private_key_passphrase` atau set env var `SSH_PRIVATE_KEY_PASSPHRASE`.
+3. **Verifikasi Host Key Asli**:
+   Untuk produksi, ubah `insecure_ignore_host_key: false`. Aplikasi akan memverifikasi sidik jari host key server terhadap file `known_hosts` (default membaca dari `~/.ssh/known_hosts` atau path yang Anda tentukan di `known_hosts_path`).
 
 ## Langkah 4: Jalankan
 
@@ -92,7 +122,5 @@ Lalu jalankan `monitoring-app.exe` — tetap butuh file `config.yaml` dan folder
 
 ## Yang Perlu Disesuaikan / Dikembangkan Lagi
 
-- **Keamanan:** saat ini `HostKeyCallback: ssh.InsecureIgnoreHostKey()` dipakai supaya simpel — untuk pemakaian jangka panjang sebaiknya verifikasi host key asli, dan sebaiknya pakai **private key** daripada password.
-- **Password di config.yaml** masih plain text — kalau mau lebih aman, bisa dienkripsi atau dipindah ke environment variable.
 - **Alerting:** belum ada notifikasi kalau CPU/disk mendekati penuh — bisa ditambah pengecekan threshold di `checkServer()` lalu kirim ke Telegram/email/Slack.
 - **Multi-server:** kalau nanti mau monitoring lebih dari 1 server, struktur `config.yaml` dan tabel `metrics` perlu ditambah kolom/field `server_id`.

@@ -1,11 +1,25 @@
 # Konfigurasi server yang mau dimonitor
 server:
-  host: "ip server"
+  host: "192.168.1.100"
   port: "22"
   username: "root"
-  # Pilih salah satu: password ATAU private_key_path (kosongkan yang tidak dipakai)
+
+  # Autentikasi: Pilih salah satu (password ATAU private_key_path)
+  # Tips Keamanan: Anda bisa menggunakan sintaks ${ENV_VAR} atau env var sistem SSH_PASSWORD
+  # Contoh: password: "${SSH_PASSWORD}"
   password: "your_password_here"
-  private_key_path: ""  # Contoh: "C:/Users/username/.ssh/id_rsa" atau "/home/user/.ssh/id_rsa"
+  
+  # Autentikasi via Private Key (lebih direkomendasikan daripada password)
+  private_key_path: ""       # Contoh: "C:/Users/username/.ssh/id_rsa" atau "/home/user/.ssh/id_rsa"
+  private_key_passphrase: "" # Kosongkan jika key tidak diproteksi passphrase
+
+  # Keamanan Host Key:
+  # - insecure_ignore_host_key: true  -> Mengabaikan verifikasi host key (praktis untuk dev/testing)
+  # - insecure_ignore_host_key: false -> Verifikasi host key via known_hosts (direkomendasikan untuk production)
+  insecure_ignore_host_key: true
+
+  # Path file known_hosts (opsional, default mengecek ~/.ssh/known_hosts jika dikosongkan)
+  known_hosts_path: ""
 
 # Interval pengecekan (dalam detik)
 check_interval_seconds: 30
